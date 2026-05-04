@@ -452,7 +452,7 @@ class SnappingScrollPhysics extends ScrollPhysics {
     // Nếu người dùng đang vuốt với một vận tốc nhất định
     if (velocity.abs() > tolerance.velocity) {
       // Dùng FrictionSimulation để ước lượng vị trí nó sẽ dừng lại một cách tự nhiên
-      final FrictionSimulation frictionSimulation = FrictionSimulation(0.15, position.pixels, velocity);
+      final FrictionSimulation frictionSimulation = FrictionSimulation(0.5, position.pixels, velocity);
       target = frictionSimulation.finalX;
     }
 
