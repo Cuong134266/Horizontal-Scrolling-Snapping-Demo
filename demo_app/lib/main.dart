@@ -265,15 +265,26 @@ class _AccountsScreenState extends State<AccountsScreen> {
                             ),
                             const SizedBox(height: 24),
 
-                            // HORIZONTAL SNAPPING SCROLLER
+                            // Khu vực danh sách cuộn ngang với hiệu ứng bắt dính (Snapping)
+                            // Sử dụng SizedBox để cố định chiều cao cho dải thẻ
                             SizedBox(
                               height: 130,
+                              // OverflowBox cho phép ListView mở rộng vượt ra ngoài margin(16) của Container cha
+                              // Nhờ vậy, ListView sẽ có chiều rộng thực tế là 390 (bằng toàn màn hình điện thoại).
+                              // Điều này giải quyết lỗi "bị cắt mất thẻ (clip) ở viền trái/phải" khi cuộn!
                               child: OverflowBox(
                                 maxWidth: 390,
                                 child: ListView.builder(
                                   scrollDirection: Axis.horizontal,
+                                  // Sử dụng Custom Physics để:
+                                  // 1. Nhận diện thao tác vuốt nhanh để có thể bay qua nhiều thẻ (vuốt mạnh nhảy nhiều thẻ).
+                                  // 2. Tự động "bắt dính" (snap) vào chính xác vị trí của thẻ gần nhất khi dừng.
+                                  // 252 = 240 (chiều rộng thẻ) + 12 (khoảng cách bên phải thẻ).
                                   physics: const SnappingScrollPhysics(itemWidth: 252),
+                                  // Padding left 36px để thụt lùi thẻ đầu tiên vào đúng vị trí bắt đầu
+                                  // Padding right 36px để thẻ cuối cùng khi cuộn hết cũng có khoảng nghỉ đẹp.
                                   padding: const EdgeInsets.only(left: 36, right: 36),
+                                  // Không cắt phần hiển thị vượt quá bounds, cho phép thẻ mượt mà trôi ra khỏi mép
                                   clipBehavior: Clip.none,
                                   itemCount: accounts.length + 1,
                                   itemBuilder: (context, index) {
@@ -413,8 +424,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
   }
 }
 
+// Class quy định nguyên lý vật lý (Physics) khi cuộn
+// Mục đích: Cho phép người dùng vuốt trượt theo đà qua nhiều phần tử,
+// nhưng khi dừng lại, nó phải tự động 'snap' (bắt dính) vào đúng lề của phần tử gần nhất.
 class SnappingScrollPhysics extends ScrollPhysics {
-  final double itemWidth;
+  final double itemWidth; // Chiều rộng chính xác của 1 thẻ + khoảng trống (gap)
 
   const SnappingScrollPhysics({required this.itemWidth, super.parent});
 
@@ -425,6 +439,8 @@ class SnappingScrollPhysics extends ScrollPhysics {
 
   @override
   Simulation? createBallisticSimulation(ScrollMetrics position, double velocity) {
+    // Nếu đang cuộn vượt quá giới hạn (kéo quá đầu hoặc quá cuối danh sách), 
+    // giao lại việc mô phỏng độ nảy (bounce) cho class cha.
     if ((velocity <= 0.0 && position.pixels <= position.minScrollExtent) ||
         (velocity >= 0.0 && position.pixels >= position.maxScrollExtent)) {
       return super.createBallisticSimulation(position, velocity);
@@ -433,19 +449,26 @@ class SnappingScrollPhysics extends ScrollPhysics {
     final Tolerance tolerance = toleranceFor(position);
     double target = position.pixels;
 
+    // Nếu người dùng đang vuốt với một vận tốc nhất định
     if (velocity.abs() > tolerance.velocity) {
+      // Dùng FrictionSimulation để ước lượng vị trí nó sẽ dừng lại một cách tự nhiên
       final FrictionSimulation frictionSimulation = FrictionSimulation(0.15, position.pixels, velocity);
       target = frictionSimulation.finalX;
     }
 
+    // LÀM TRÒN VỊ TRÍ ĐÍCH:
+    // Ép vị trí dừng tự nhiên vào mốc gần nhất chia hết cho itemWidth (chiều rộng 1 khối)
+    // Ví dụ itemWidth = 252. Vị trí tự nhiên là 600 -> nó sẽ snap về mốc 504.
     target = (target / itemWidth).roundToDouble() * itemWidth;
 
+    // Đảm bảo không bắt dính vượt ngoài biên trái/phải
     if (target < position.minScrollExtent) {
       target = position.minScrollExtent;
     } else if (target > position.maxScrollExtent) {
       target = position.maxScrollExtent;
     }
 
+    // Trả về một chuyển động dạng lò xo (Spring) để cuộn êm ái tới đúng điểm đích vừa tính
     return SpringSimulation(
       spring,
       position.pixels,
